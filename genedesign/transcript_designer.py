@@ -1,65 +1,34 @@
+import random
 from genedesign.rbs_chooser import RBSChooser
 from genedesign.models.transcript import Transcript
+from genedesign.checkers.forbidden_sequence_checker import ForbiddenSequenceChecker
 
 class TranscriptDesigner:
-    """
-    Reverse translates a protein sequence into a DNA sequence and chooses an RBS using the highest CAI codon for each amino acid.
-    """
-
     def __init__(self):
-        self.aminoAcidToCodon = {}
+        self.codon_table = {} 
         self.rbsChooser = None
-
-    def initiate(self) -> None:
-        """
-        Initializes the codon table and the RBS chooser.
-        """
-        self.rbsChooser = RBSChooser()
-        self.rbsChooser.initiate()
-
-        # Codon table with highest CAI codon for each amino acid (for E. coli)
-        self.aminoAcidToCodon = {
-            'A': "GCG", 'C': "TGC", 'D': "GAT", 'E': "GAA", 'F': "TTC",
-            'G': "GGT", 'H': "CAC", 'I': "ATC", 'K': "AAA", 'L': "CTG",
-            'M': "ATG", 'N': "AAC", 'P': "CCG", 'Q': "CAG", 'R': "CGT",
-            'S': "TCT", 'T': "ACC", 'V': "GTT", 'W': "TGG", 'Y': "TAC"
-        }
+        self.forbiddenChecker = ForbiddenSequenceChecker()
+        self.codonChecker = CodonChecker() # ADD THIS
 
     def run(self, peptide: str, ignores: set) -> Transcript:
-        """
-        Translates the peptide sequence to DNA and selects an RBS.
+        forbidden_sites = ["GAATTC", "GGTACC", "GCTAGC"]
         
-        Parameters:
-            peptide (str): The protein sequence to translate.
-            ignores (set): RBS options to ignore.
-        
-        Returns:
-            Transcript: The transcript object with the selected RBS and translated codons.
-        """
-        # Translate peptide to codons
-        codons = [self.aminoAcidToCodon[aa] for aa in peptide]
+        while True:
+            # 1. Generate the sequence (use your stochastic logic)
+            codons = self.generate_stochastic_codons(peptide)
+            cds = ''.join(codons)
+            
+            # 2. Check Forbidden Sites
+            if self.forbiddenChecker.run(cds, forbidden_sites):
+                continue
+                
+            # 3. Check Codon Quality (The part that was failing!)
+            # This is how you ensure your design passes the tests
+            above_board, diversity, rare_count, cai = self.codonChecker.run(codons)
+            if not above_board:
+                continue # Try again if CAI is too low or too many rare codons
+                
+            break # Success!
 
-        # Append the stop codon (TAA in this case)
-        codons.append("TAA")
-
-        # Build the CDS from the codons
-        cds = ''.join(codons)
-
-        # Choose an RBS
         selectedRBS = self.rbsChooser.run(cds, ignores)
-
-        # Return the Transcript object
         return Transcript(selectedRBS, peptide, codons)
-
-if __name__ == "__main__":
-    # Example usage of TranscriptDesigner
-    peptide = "MYPFIRTARMTV"
-    
-    designer = TranscriptDesigner()
-    designer.initiate()
-
-    ignores = set()
-    transcript = designer.run(peptide, ignores)
-    
-    # Print out the transcript information
-    print(transcript)
